@@ -57,3 +57,18 @@ export const quizQuestions: QuizQuestion[] = [
     answerIndex: 1,
   },
 ];
+
+import type { StudySet } from "./study-generation";
+
+export const fallbackStudySet: StudySet = {
+  flashcards: flashcards.map((c) => ({ id: c.id, question: c.front, answer: c.back })),
+  quiz: quizQuestions.map((q, i) => ({
+    id: q.id,
+    difficulty: (i < 2 ? "easy" : i < 4 ? "medium" : "hard") as "easy" | "medium" | "hard",
+    question: q.question,
+    options: q.options,
+    correctAnswerIndex: q.answerIndex,
+    explanation: `The correct answer is "${q.options[q.answerIndex]}".`,
+  })),
+  warning: null,
+};

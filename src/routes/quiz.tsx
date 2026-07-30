@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { quizQuestions } from "@/lib/study-data";
+import { fallbackStudySet } from "@/lib/study-data";
+import { loadStudySet, type StudySet } from "@/lib/study-generation";
 
 export const Route = createFileRoute("/quiz")({
   head: () => ({
@@ -9,31 +10,47 @@ export const Route = createFileRoute("/quiz")({
       { title: "Quiz — QuickFlip" },
       {
         name: "description",
-        content: "Test yourself with multiple-choice questions, get instant right or wrong feedback, and see your final score.",
+        content:
+          "Test yourself with multiple-choice questions, get instant right or wrong feedback, and see your final score.",
       },
       { property: "og:title", content: "Quiz — QuickFlip" },
       {
         property: "og:description",
         content: "Multiple-choice practice with instant feedback and a final score breakdown.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: QuizPage,
 });
 
+const difficultyStyles: Record<string, string> = {
+  easy: "border-success/50 text-success",
+  medium: "border-primary/50 text-primary",
+  hard: "border-destructive/50 text-destructive",
+};
+
 function QuizPage() {
+  const [set, setSet] = useState<StudySet>(fallbackStudySet);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
 
-  const total = quizQuestions.length;
-  const q = quizQuestions[index];
+  useEffect(() => {
+    const stored = loadStudySet();
+    if (stored?.quiz.length) setSet(stored);
+  }, []);
+
+  const questions = set.quiz.length ? set.quiz : fallbackStudySet.quiz;
+  const total = questions.length;
+  const q = questions[Math.min(index, total - 1)];
 
   const choose = (i: number) => {
     if (selected !== null) return;
     setSelected(i);
-    if (i === q.answerIndex) setScore((s) => s + 1);
+    if (i === q.correctAnswerIndex) setScore((s) => s + 1);
   };
 
   const next = () => {
@@ -101,11 +118,19 @@ function QuizPage() {
         />
       </div>
 
-      <h1 className="mt-8 text-2xl font-semibold leading-snug tracking-tight">{q.question}</h1>
+      <span
+        className={`mt-6 w-fit rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest ${
+          difficultyStyles[q.difficulty] ?? "border-border text-muted-foreground"
+        }`}
+      >
+        {q.difficulty}
+      </span>
+
+      <h1 className="mt-3 text-2xl font-semibold leading-snug tracking-tight">{q.question}</h1>
 
       <div className="mt-6 grid gap-3">
         {q.options.map((opt, i) => {
-          const isAnswer = i === q.answerIndex;
+          const isAnswer = i === q.correctAnswerIndex;
           const isPicked = selected === i;
           let cls = "border-border bg-card hover:bg-accent";
           if (selected !== null) {
@@ -133,9 +158,10 @@ function QuizPage() {
       {selected !== null && (
         <>
           <p className="mt-5 text-sm text-muted-foreground">
-            {selected === q.answerIndex
+            {selected === q.correctAnswerIndex
               ? "Correct — nice work."
-              : `Not quite. The answer is "${q.options[q.answerIndex]}".`}
+              : `Not quite. The answer is "${q.options[q.correctAnswerIndex]}".`}
+            {q.explanation ? ` ${q.explanation}` : ""}
           </p>
           <Button className="mt-4 h-12 w-full rounded-2xl" onClick={next}>
             {index === total - 1 ? "See score" : "Next question"}
