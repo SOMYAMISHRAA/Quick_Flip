@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { flashcards } from "@/lib/study-data";
+import { fallbackStudySet } from "@/lib/study-data";
+import { loadStudySet, type StudySet } from "@/lib/study-generation";
 
 export const Route = createFileRoute("/flashcards")({
   head: () => ({
@@ -16,16 +17,26 @@ export const Route = createFileRoute("/flashcards")({
         property: "og:description",
         content: "Tap to flip, swipe through your deck, and track progress card by card.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: FlashcardsPage,
 });
 
 function FlashcardsPage() {
+  const [set, setSet] = useState<StudySet>(fallbackStudySet);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const card = flashcards[index];
-  const total = flashcards.length;
+
+  useEffect(() => {
+    const stored = loadStudySet();
+    if (stored?.flashcards.length) setSet(stored);
+  }, []);
+
+  const cards = set.flashcards.length ? set.flashcards : fallbackStudySet.flashcards;
+  const total = cards.length;
+  const card = cards[Math.min(index, total - 1)];
 
   const go = (delta: number) => {
     setFlipped(false);
@@ -50,6 +61,12 @@ function FlashcardsPage() {
         />
       </div>
 
+      {set.warning && (
+        <p className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+          {set.warning}
+        </p>
+      )}
+
       <button
         onClick={() => setFlipped((f) => !f)}
         aria-label="Flip card"
@@ -58,12 +75,12 @@ function FlashcardsPage() {
         <div className={`flip-inner min-h-72 w-full ${flipped ? "flip-inner-flipped" : ""}`}>
           <div className="flip-face flex min-h-72 w-full flex-col justify-between rounded-3xl border border-border bg-card p-6">
             <span className="text-xs uppercase tracking-widest text-muted-foreground">Question</span>
-            <p className="text-2xl font-semibold leading-snug">{card.front}</p>
+            <p className="text-2xl font-semibold leading-snug">{card.question}</p>
             <span className="text-xs text-muted-foreground">Tap to reveal answer</span>
           </div>
           <div className="flip-face flip-face-back absolute inset-0 flex min-h-72 w-full flex-col justify-between rounded-3xl border border-primary/40 bg-primary/10 p-6">
             <span className="text-xs uppercase tracking-widest text-primary">Answer</span>
-            <p className="text-xl font-medium leading-relaxed">{card.back}</p>
+            <p className="text-xl font-medium leading-relaxed">{card.answer}</p>
             <span className="text-xs text-muted-foreground">Tap to flip back</span>
           </div>
         </div>

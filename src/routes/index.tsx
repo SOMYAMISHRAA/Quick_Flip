@@ -1,7 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { generateStudySet } from "@/lib/study.functions";
+import { saveStudySet, clearStudySet } from "@/lib/study-generation";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -17,6 +20,8 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "Paste notes, get flashcards and quizzes in seconds. Study smarter with QuickFlip.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Index,
@@ -25,11 +30,30 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const generateFn = useServerFn(generateStudySet);
 
-  const generate = () => {
+  const generate = async () => {
+    setError(null);
     setLoading(true);
-    setTimeout(() => navigate({ to: "/flashcards" }), 700);
+    try {
+      const result = await generateFn({ data: { notes } });
+      if (!result.flashcards.length && !result.quiz.length) {
+        throw new Error(result.warning ?? "Those notes were too short to work with.");
+      }
+      saveStudySet(result);
+      navigate({ to: "/flashcards" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const useDemo = () => {
+    clearStudySet();
+    navigate({ to: "/flashcards" });
   };
 
   return (
@@ -47,7 +71,7 @@ function Index() {
         <span className="text-primary">Flip into knowledge.</span>
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-        QuickFlip turns messy study notes into clean flashcards and quick quizzes.
+        QuickFlip turns messy study notes into 10 AI-generated flashcards and a 5-question quiz.
       </p>
 
       <Textarea
@@ -57,17 +81,30 @@ function Index() {
         className="mt-8 min-h-56 resize-none rounded-2xl border-border bg-card p-4 text-base leading-relaxed placeholder:text-muted-foreground/70 focus-visible:ring-primary"
       />
       <div className="mt-2 text-right text-xs text-muted-foreground">
-        {notes.trim() ? `${notes.trim().split(/\s+/).length} words` : "Demo data is used for now"}
+        {notes.trim() ? `${notes.trim().split(/\s+/).length} words` : "Paste notes to generate"}
       </div>
 
       <Button
         size="lg"
         onClick={generate}
-        disabled={loading}
+        disabled={loading || !notes.trim()}
         className="mt-4 h-13 w-full rounded-2xl py-6 text-base font-semibold"
       >
         {loading ? "Generating…" : "Generate"}
       </Button>
+
+      {error && (
+        <p className="mt-3 rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-foreground">
+          {error}
+        </p>
+      )}
+
+      <button
+        onClick={useDemo}
+        className="mt-4 text-center text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+      >
+        Or explore with the demo deck
+      </button>
 
       <div className="mt-10 grid gap-3">
         <Link
