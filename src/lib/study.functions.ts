@@ -2,28 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
-import { SYSTEM_PROMPT, buildUserPrompt, normalizeStudySet } from "./study-prompt";
-
-const StudySetSchema = z.object({
-  flashcards: z.array(
-    z.object({
-      id: z.number(),
-      question: z.string(),
-      answer: z.string(),
-    }),
-  ),
-  quiz: z.array(
-    z.object({
-      id: z.number(),
-      difficulty: z.string(),
-      question: z.string(),
-      options: z.array(z.string()),
-      correctAnswerIndex: z.number(),
-      explanation: z.string(),
-    }),
-  ),
-  warning: z.string().nullable(),
-});
+import { SYSTEM_PROMPT, StudySetSchema, buildUserPrompt, normalizeStudySet } from "./study-prompt";
 
 export const generateStudySet = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ notes: z.string() }).parse(input))

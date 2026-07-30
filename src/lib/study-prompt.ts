@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { QuizDifficulty, StudySet } from "./study-generation";
 
 export const SYSTEM_PROMPT = `You are an expert study assistant. You read study notes and generate learning materials from them.
@@ -62,3 +63,24 @@ export function normalizeStudySet(raw: unknown): StudySet {
 
   return { flashcards, quiz, warning };
 }
+
+export const StudySetSchema = z.object({
+  flashcards: z.array(
+    z.object({
+      id: z.number(),
+      question: z.string(),
+      answer: z.string(),
+    }),
+  ),
+  quiz: z.array(
+    z.object({
+      id: z.number(),
+      difficulty: z.string(),
+      question: z.string(),
+      options: z.array(z.string()),
+      correctAnswerIndex: z.number(),
+      explanation: z.string(),
+    }),
+  ),
+  warning: z.string().nullable(),
+});
