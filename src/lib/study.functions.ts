@@ -1,36 +1,55 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "./ai-gateway.server";
-import { SYSTEM_PROMPT, StudySetSchema, buildUserPrompt, normalizeStudySet } from "./study-prompt";
+import { getGeminiClient } from "./gemini.server";
+import { SYSTEM_PROMPT, buildUserPrompt, normalizeStudySet } from "./study-prompt";
 
 export const generateStudySet = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => z.object({ notes: z.string() }).parse(input))
+  .validator((input: unknown) => z.object({ notes: z.string() }).parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
+
+
     if (!apiKey) throw new Error("AI is not configured yet.");
 
     const notes = data.notes.trim();
     if (!notes) throw new Error("Paste some notes first.");
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
+    const ai = getGeminiClient(apiKey);
 
     try {
-      const { output } = await generateText({
-        model: gateway("google/gemini-3.6-flash"),
-        system: SYSTEM_PROMPT,
-        prompt: buildUserPrompt(notes),
-        output: Output.object({ schema: StudySetSchema }),
-      });
-      return normalizeStudySet(output);
-    } catch (error) {
-      if (NoObjectGeneratedError.isInstance(error) && error.text) {
-        const cleaned = error.text.replace(/^```(?:json)?/i, "").replace(/```$/, "");
-        return normalizeStudySet(JSON.parse(cleaned));
+     const response = await ai.models.generateContent({
+  model: "gemini-3.6-flash",
+  contents: `${SYSTEM_PROMPT}
+
+${buildUserPrompt(notes)}
+
+Return ONLY valid JSON.`,
+});
+
+      const text = response.text;
+      
+      if (!text) throw new Error("Empty response from Gemini.");
+
+      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        throw new Error("Could not parse AI response. Please try again.");
       }
+
+      return normalizeStudySet(parsed);
+    } catch (error) {
+
+      
       const message = error instanceof Error ? error.message : "";
       if (message.includes("429")) throw new Error("Rate limit reached — try again in a moment.");
-      if (message.includes("402")) throw new Error("AI credits exhausted. Add credits to continue.");
+      if (message.includes("402") || message.includes("RESOURCE_EXHAUSTED")) {
+        throw new Error("AI credits exhausted. Add credits to continue.");
+      }
+      if (message === "Could not parse AI response. Please try again.") throw error;
+      if (message === "Empty response from Gemini.") throw new Error("Could not generate study materials. Please try again.");
       throw new Error("Could not generate study materials. Please try again.");
     }
   });
